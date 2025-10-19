@@ -1,0 +1,77 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+easy-sync
+easy-sync-*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Build directories
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Upload and data directories
+uploads/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files with secrets
+config.json
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Certificate files
+*.pem
+*.key
+*.crt
+*.csr
+
+# Node modules (if using npm for frontend tools)
+node_modules/
+
+# Air live reload
+.air.toml
+tmp/
