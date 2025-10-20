@@ -3,13 +3,12 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/easy-sync/easy-sync/pkg/config"
 	"github.com/grandcat/zeroconf"
 	"github.com/sirupsen/logrus"
-	"github.com/easy-sync/easy-sync/pkg/config"
 )
 
 type MDnsDiscovery struct {
@@ -34,12 +33,17 @@ type ServiceInfo struct {
 func NewMDnsDiscovery(cfg *config.Config, logger *logrus.Logger) *MDnsDiscovery {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		logger.WithError(err).Warn("Failed to create mDNS resolver")
+	}
+
 	return &MDnsDiscovery{
 		config:   cfg,
 		logger:   logger,
 		ctx:      ctx,
 		cancel:   cancel,
-		resolver: zeroconf.NewResolver(nil),
+		resolver: resolver,
 	}
 }
 
@@ -122,7 +126,7 @@ func (m *MDnsDiscovery) browseServices() {
 		}
 	}()
 
-	err := m.resolver.Browse(m.ctx, m.config.Discovery.ServiceName, "")
+	err := m.resolver.Browse(m.ctx, m.config.Discovery.ServiceName, "local.", entries)
 	if err != nil {
 		m.logger.WithError(err).Error("Failed to browse mDNS services")
 		return
@@ -200,7 +204,7 @@ func (m *MDnsDiscovery) DiscoverServices(timeout time.Duration) ([]*ServiceInfo,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := m.resolver.Browse(ctx, m.config.Discovery.ServiceName, "")
+	err := m.resolver.Browse(ctx, m.config.Discovery.ServiceName, "local.", entries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to browse mDNS services: %w", err)
 	}

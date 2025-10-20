@@ -4,27 +4,29 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/easy-sync/easy-sync/pkg/config"
-	"github.com/easy-sync/easy-sync/pkg/websocket"
-	"github.com/easy-sync/easy-sync/pkg/upload"
 	"github.com/easy-sync/easy-sync/pkg/download"
 	"github.com/easy-sync/easy-sync/pkg/security"
+	"github.com/easy-sync/easy-sync/pkg/upload"
+	"github.com/easy-sync/easy-sync/pkg/websocket"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
-	config       *config.Config
-	httpServer   *http.Server
-	router       *gin.Engine
-	logger       *logrus.Logger
-	wsManager    *websocket.Manager
-	tusHandler   *upload.TusHandler
+	config          *config.Config
+	httpServer      *http.Server
+	router          *gin.Engine
+	logger          *logrus.Logger
+	wsManager       *websocket.Manager
+	tusHandler      *upload.TusHandler
 	downloadHandler *download.Handler
-	auth         *security.AuthService
+	auth            *security.AuthService
+	finalAddr       string // Store the final bound address
 }
 
 func NewServer(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
@@ -82,7 +84,7 @@ func NewServer(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		wsManager:       wsManager,
 		tusHandler:      tusHandler,
 		downloadHandler: downloadHandler,
-		auth:           auth,
+		auth:            auth,
 	}
 
 	server.setupRoutes()
@@ -109,17 +111,20 @@ func (s *Server) setupRoutes() {
 
 		// Messages
 		api.GET("/messages", s.auth.RequireAuth(), s.getMessages)
+
+		// Configuration endpoint
+		api.GET("/config", s.getConfig)
 	}
 
 	// WebSocket endpoint
-	s.router.GET("/ws", s.wsManager.HandleWebSocket)
+	s.router.GET("/ws", func(c *gin.Context) { s.wsManager.HandleWebSocket(c.Writer, c.Request) })
 
 	// TUS file upload endpoints
-	s.router.Any("/tus/*filepath", s.tusHandler.HandleRequest)
+	s.router.Any("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
 
 	// File download endpoint
-	s.router.GET("/files/:id", s.downloadHandler.HandleDownload)
-	s.router.GET("/files/:id/sha256", s.downloadHandler.HandleSHA256)
+	s.router.GET("/files/:id", func(c *gin.Context) { s.downloadHandler.HandleDownload(c.Writer, c.Request) })
+	s.router.GET("/files/:id/sha256", func(c *gin.Context) { s.downloadHandler.HandleSHA256(c.Writer, c.Request) })
 
 	// Static files (web UI)
 	s.router.Static("/static", "./web/public")
@@ -127,33 +132,98 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start() error {
+	// Prepare HTTP server
 	addr := s.config.GetAddr()
+	_ = addr // not used directly; we use host/port from config
+
+	host := s.config.Server.Host
+	port := s.config.Server.Port
+
+	// Candidate hosts: try configured host, then 127.0.0.1 for Windows policies
+	hosts := []string{host}
+	if host == "0.0.0.0" {
+		hosts = []string{host, "127.0.0.1"}
+	}
+
+	// Candidate ports: configured port then a small range fallback
+	candidatePorts := []int{port, port + 1, port + 2}
+
+	var listener net.Listener
+	var listenErr error
+
+outer:
+	for _, h := range hosts {
+		for _, p := range candidatePorts {
+			address := fmt.Sprintf("%s:%d", h, p)
+			ln, err := net.Listen("tcp", address)
+			if err != nil {
+				s.logger.WithFields(logrus.Fields{"address": address}).WithError(err).Warn("Address unavailable, trying next")
+				listenErr = err
+				continue
+			}
+			listener = ln
+			break outer
+		}
+	}
+
+	if listener == nil {
+		// Ephemeral port fallback on last host
+		lastHost := hosts[len(hosts)-1]
+		ephemeralAddr := fmt.Sprintf("%s:%d", lastHost, 0)
+		ln, err := net.Listen("tcp", ephemeralAddr)
+		if err != nil {
+			s.logger.WithError(err).Error("Failed to bind any port")
+			if listenErr != nil {
+				return listenErr
+			}
+			return err
+		}
+		listener = ln
+	}
+
+	finalAddr := listener.Addr().String()
+	s.finalAddr = finalAddr // Store for API access
 
 	s.httpServer = &http.Server{
-		Addr:    addr,
+		Addr:    finalAddr,
 		Handler: s.router,
 	}
+
+	// Print final address to console
+	fmt.Printf("\n🚀 Easy-Sync Server is running at: %s\n", finalAddr)
+	if s.config.Server.HTTPS {
+		fmt.Printf("   HTTPS URL: https://%s\n", finalAddr)
+	} else {
+		fmt.Printf("   HTTP URL: http://%s\n", finalAddr)
+	}
+	fmt.Printf("   Health Check: http://%s/health\n", finalAddr)
+	fmt.Printf("   API Config: http://%s/api/config\n\n", finalAddr)
 
 	if s.config.Server.HTTPS {
 		if s.config.Server.CertFile == "" || s.config.Server.KeyFile == "" {
 			return fmt.Errorf("HTTPS enabled but cert file or key file not specified")
 		}
 
-		s.httpServer.TLSConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		// Minimal TLS config; http.Server.ServeTLS will wrap listener
+		s.httpServer.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 
 		s.logger.WithFields(logrus.Fields{
-			"address":   addr,
+			"address":   finalAddr,
 			"cert_file": s.config.Server.CertFile,
 			"key_file":  s.config.Server.KeyFile,
 		}).Info("Starting HTTPS server")
 
-		return s.httpServer.ListenAndServeTLS(s.config.Server.CertFile, s.config.Server.KeyFile)
+		return s.httpServer.ServeTLS(listener, s.config.Server.CertFile, s.config.Server.KeyFile)
 	}
 
-	s.logger.WithField("address", addr).Info("Starting HTTP server")
-	return s.httpServer.ListenAndServe()
+	s.logger.WithField("address", finalAddr).Info("Starting HTTP server")
+	return s.httpServer.Serve(listener)
+}
+
+func (s *Server) StartWebSocketManager() {
+	if s.wsManager != nil {
+		s.wsManager.Start()
+	}
 }
 
 func (s *Server) Stop(ctx context.Context) error {
@@ -186,8 +256,8 @@ func (s *Server) generateQR(c *gin.Context) {
 
 func (s *Server) pairDevice(c *gin.Context) {
 	var request struct {
-		Token    string `json:"token" binding:"required"`
-		DeviceID string `json:"device_id" binding:"required"`
+		Token      string `json:"token" binding:"required"`
+		DeviceID   string `json:"device_id" binding:"required"`
 		DeviceName string `json:"device_name" binding:"required"`
 	}
 
@@ -208,7 +278,7 @@ func (s *Server) pairDevice(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"token": token,
+		"token":      token,
 		"expires_in": s.config.Security.TokenExpiry * 60, // convert to seconds
 	})
 }
@@ -238,4 +308,32 @@ func (s *Server) deleteFile(c *gin.Context) {
 func (s *Server) getMessages(c *gin.Context) {
 	// TODO: Implement message retrieval
 	c.JSON(200, gin.H{"messages": []interface{}{}})
+}
+
+func (s *Server) getConfig(c *gin.Context) {
+	protocol := "http"
+	if s.config.Server.HTTPS {
+		protocol = "https"
+	}
+
+	configData := gin.H{
+		"server": gin.H{
+			"address":         s.finalAddr,
+			"protocol":        protocol,
+			"url":             fmt.Sprintf("%s://%s", protocol, s.finalAddr),
+			"configured_host": s.config.Server.Host,
+			"configured_port": s.config.Server.Port,
+			"https_enabled":   s.config.Server.HTTPS,
+		},
+		"endpoints": gin.H{
+			"health":    fmt.Sprintf("%s://%s/health", protocol, s.finalAddr),
+			"websocket": fmt.Sprintf("ws://%s/ws", s.finalAddr),
+			"upload":    fmt.Sprintf("%s://%s/tus/", protocol, s.finalAddr),
+			"api_base":  fmt.Sprintf("%s://%s/api", protocol, s.finalAddr),
+		},
+		"version":   "1.0.0",
+		"timestamp": time.Now().Unix(),
+	}
+
+	c.JSON(200, configData)
 }

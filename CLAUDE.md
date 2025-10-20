@@ -219,3 +219,6 @@ npm run test:performance
 - **Security-first approach**: All transfers require device pairing and authentication
 - **Cross-platform focus**: Prioritize browser compatibility over native features initially
 - **Progressive enhancement**: Start with basic HTTP transfers, add advanced features incrementally
+- network request,should set http proxy first:
+`$env:HTTP_PROXY="http://127.0.0.1:13824"`
+`$env:HTTPS_PROXY="http://127.0.0.1:13824"`

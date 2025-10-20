@@ -4,18 +4,20 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/easy-sync/easy-sync/pkg/config"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tus/tusd/v2/pkg/handler"
-	"github.com/google/uuid"
-	"github.com/easy-sync/easy-sync/pkg/config"
 )
 
 type TusHandler struct {
@@ -56,14 +58,15 @@ func NewTusHandler(cfg *config.Config, logger *logrus.Logger) (*TusHandler, erro
 	composer := handler.NewStoreComposer()
 	store.useIn(composer)
 
-	tusHandler := handler.NewHandler(composer)
-	tusHandler.Config = handler.Config{
-		MaxSize:               cfg.Storage.MaxSize,
-		RespectForwardedHost:  true,
-		BasePath:              "/tus/",
-		NotifyCompleteUploads: true,
+	tusHandler, err := handler.NewHandler(handler.Config{
+		StoreComposer:           composer,
+		BasePath:                "/tus/",
+		MaxSize:                 cfg.Storage.MaxSize,
+		NotifyCompleteUploads:   true,
 		NotifyTerminatedUploads: true,
-		NotifyUploadProgress:   true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tus handler: %w", err)
 	}
 
 	return &TusHandler{
@@ -100,17 +103,17 @@ func (s *FileStore) useIn(composer *handler.StoreComposer) {
 	composer.UseCore(s)
 	composer.UseTerminater(s)
 	composer.UseConcater(s)
-	composer.UseLengthDefiner(s)
+	composer.UseLengthDeferrer(s)
 }
 
-func (s *FileStore) NewUpload(ctx context.Context, info handler.UploadInfo) (handler.Upload, error) {
+func (s *FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handler.Upload, error) {
 	// Generate unique file ID
 	fileID := uuid.New().String()
 
 	// Extract filename from metadata
 	var fileName string
 	if metadata, ok := info.MetaData["filename"]; ok {
-		fileName = string(metadata)
+		fileName = metadata
 	} else {
 		fileName = fileID
 	}
@@ -168,15 +171,15 @@ func (s *FileStore) GetUpload(ctx context.Context, id string) (handler.Upload, e
 	}, nil
 }
 
-func (s *FileStore) AsTerminater(upload handler.Upload) handler.Terminater {
+func (s *FileStore) AsTerminatableUpload(upload handler.Upload) handler.TerminatableUpload {
 	return upload.(*FileUpload)
 }
 
-func (s *FileStore) AsLengthDefiner(upload handler.Upload) handler.LengthDefiner {
+func (s *FileStore) AsLengthDeclarableUpload(upload handler.Upload) handler.LengthDeclarableUpload {
 	return upload.(*FileUpload)
 }
 
-func (s *FileStore) AsConcater(upload handler.Upload) handler.Concater {
+func (s *FileStore) AsConcatableUpload(upload handler.Upload) handler.ConcatableUpload {
 	return upload.(*FileUpload)
 }
 
@@ -187,7 +190,7 @@ type FileUpload struct {
 	fileName  string
 	size      int64
 	offset    int64
-	info      handler.UploadInfo
+	info      handler.FileInfo
 	store     *FileStore
 	createdAt time.Time
 	mu        sync.RWMutex
@@ -212,15 +215,15 @@ func (u *FileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader
 	u.offset = offset + n
 
 	u.store.logger.WithFields(logrus.Fields{
-		"upload_id": u.id,
-		"offset":    u.offset,
+		"upload_id":  u.id,
+		"offset":     u.offset,
 		"chunk_size": n,
 	}).Debug("Chunk written")
 
 	return n, nil
 }
 
-func (u *FileUpload) GetInfo(ctx context.Context) (handler.UploadInfo, error) {
+func (u *FileUpload) GetInfo(ctx context.Context) (handler.FileInfo, error) {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
@@ -228,6 +231,17 @@ func (u *FileUpload) GetInfo(ctx context.Context) (handler.UploadInfo, error) {
 	info.Offset = u.offset
 	info.SizeIsDeferred = u.size < 0
 	return info, nil
+}
+
+func (u *FileUpload) GetReader(ctx context.Context) (io.ReadCloser, error) {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+
+	file, err := os.Open(u.filePath)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }
 
 func (u *FileUpload) FinishUpload(ctx context.Context) error {
@@ -363,7 +377,7 @@ func (u *FileUpload) getMimeType() string {
 
 func (u *FileUpload) getDeviceFromMeta() string {
 	if deviceMeta, ok := u.info.MetaData["device"]; ok {
-		return string(deviceMeta)
+		return deviceMeta
 	}
 	return "unknown"
 }

@@ -15,7 +15,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/easy-sync/easy-sync/pkg/config"
-	"github.com/easy-sync/easy-sync/pkg/upload"
 )
 
 type Handler struct {

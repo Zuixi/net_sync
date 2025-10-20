@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/easy-sync/easy-sync/pkg/config"
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
-	"github.com/easy-sync/easy-sync/pkg/config"
 )
 
 type AuthService struct {
@@ -119,11 +120,11 @@ func (a *AuthService) GenerateQRData() (map[string]interface{}, error) {
 
 func (a *AuthService) CreateDevice(deviceID, deviceName string) (*Device, error) {
 	device := &Device{
-		ID:        deviceID,
-		Name:      deviceName,
-		Created:   time.Now(),
-		LastSeen:  time.Now(),
-		Trusted:   true, // Auto-trust devices that complete pairing
+		ID:       deviceID,
+		Name:     deviceName,
+		Created:  time.Now(),
+		LastSeen: time.Now(),
+		Trusted:  true, // Auto-trust devices that complete pairing
 	}
 
 	// TODO: Store device in database

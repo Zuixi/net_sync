@@ -1,18 +1,16 @@
 package websocket
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
-	"github.com/google/uuid"
 	"github.com/easy-sync/easy-sync/pkg/config"
 	"github.com/easy-sync/easy-sync/pkg/security"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 type MessageType string
@@ -39,19 +37,19 @@ type Message struct {
 }
 
 type FileOfferMessage struct {
-	Type     MessageType `json:"type"`
-	OfferID  string      `json:"offer_id"`
-	From     string      `json:"from"`
-	Name     string      `json:"name"`
-	Size     int64       `json:"size"`
-	Mime     string      `json:"mime"`
-	SHA256   string      `json:"sha256"`
-	URL      string      `json:"url"`
+	Type    MessageType `json:"type"`
+	OfferID string      `json:"offer_id"`
+	From    string      `json:"from"`
+	Name    string      `json:"name"`
+	Size    int64       `json:"size"`
+	Mime    string      `json:"mime"`
+	SHA256  string      `json:"sha256"`
+	URL     string      `json:"url"`
 }
 
 type HelloMessage struct {
-	Type        string   `json:"type"`
-	Device      string   `json:"device"`
+	Type         string   `json:"type"`
+	Device       string   `json:"device"`
 	Capabilities []string `json:"capabilities"`
 }
 
@@ -390,11 +388,6 @@ func (c *Client) handleFileOfferAckMessage(msg json.RawMessage) {
 }
 
 func (m *Manager) SendFileOffer(offer FileOfferMessage) error {
-	msg := Message{
-		Type:      MessageTypeFileOffer,
-		Timestamp: time.Now().Unix(),
-	}
-
 	// Convert FileOfferMessage to JSON and embed in Message
 	offerData, err := json.Marshal(offer)
 	if err != nil {
@@ -403,15 +396,15 @@ func (m *Manager) SendFileOffer(offer FileOfferMessage) error {
 
 	// Use a custom type to embed the file offer data
 	type FileOfferEmbed struct {
-		Type      MessageType          `json:"type"`
-		OfferID   string               `json:"offer_id"`
-		From      string               `json:"from"`
-		Name      string               `json:"name"`
-		Size      int64                `json:"size"`
-		Mime      string               `json:"mime"`
-		SHA256    string               `json:"sha256"`
-		URL       string               `json:"url"`
-		Timestamp int64                `json:"timestamp"`
+		Type      MessageType `json:"type"`
+		OfferID   string      `json:"offer_id"`
+		From      string      `json:"from"`
+		Name      string      `json:"name"`
+		Size      int64       `json:"size"`
+		Mime      string      `json:"mime"`
+		SHA256    string      `json:"sha256"`
+		URL       string      `json:"url"`
+		Timestamp int64       `json:"timestamp"`
 	}
 
 	var fileOffer FileOfferEmbed

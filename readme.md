@@ -23,6 +23,8 @@ git clone https://github.com/easy-sync/easy-sync.git
 cd easy-sync
 
 # 安装依赖
+#windows
+$env:GOPROXY = "https://goproxy.cn,direct";
 go mod download
 
 # 编译
