@@ -17,7 +17,7 @@ export default function Pairing() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: tokenInput.trim(),
-          device_id: crypto.randomUUID(),
+          device_id: 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
           device_name: navigator.userAgent.includes("Mobile") ? "Mobile Device" : "Desktop Browser",
         }),
       });

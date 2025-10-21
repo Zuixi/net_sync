@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/easy-sync/easy-sync/pkg/config"
@@ -14,8 +15,10 @@ import (
 )
 
 type AuthService struct {
-	config *config.Config
-	logger *logrus.Logger
+	config  *config.Config
+	logger  *logrus.Logger
+	devices map[string]*Device
+	mutex   sync.RWMutex
 }
 
 type Claims struct {
@@ -57,8 +60,9 @@ func NewAuthService(cfg *config.Config, logger *logrus.Logger) *AuthService {
 	}
 
 	return &AuthService{
-		config: cfg,
-		logger: logger,
+		config:  cfg,
+		logger:  logger,
+		devices: make(map[string]*Device),
 	}
 }
 
@@ -119,6 +123,9 @@ func (a *AuthService) GenerateQRData() (map[string]interface{}, error) {
 }
 
 func (a *AuthService) CreateDevice(deviceID, deviceName string) (*Device, error) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	device := &Device{
 		ID:       deviceID,
 		Name:     deviceName,
@@ -127,7 +134,9 @@ func (a *AuthService) CreateDevice(deviceID, deviceName string) (*Device, error)
 		Trusted:  true, // Auto-trust devices that complete pairing
 	}
 
-	// TODO: Store device in database
+	// Store device in memory map
+	a.devices[deviceID] = device
+
 	a.logger.WithFields(logrus.Fields{
 		"device_id":   deviceID,
 		"device_name": deviceName,
@@ -137,24 +146,55 @@ func (a *AuthService) CreateDevice(deviceID, deviceName string) (*Device, error)
 }
 
 func (a *AuthService) GetDevice(deviceID string) (*Device, error) {
-	// TODO: Retrieve device from database
-	return nil, fmt.Errorf("device not found")
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	device, exists := a.devices[deviceID]
+	if !exists {
+		return nil, fmt.Errorf("device not found")
+	}
+
+	// Update last seen time
+	device.LastSeen = time.Now()
+	return device, nil
 }
 
 func (a *AuthService) ListDevices() ([]*Device, error) {
-	// TODO: Retrieve all devices from database
-	return []*Device{}, nil
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	// Return slice of all devices
+	devices := make([]*Device, 0, len(a.devices))
+	for _, device := range a.devices {
+		devices = append(devices, device)
+	}
+
+	return devices, nil
 }
 
 func (a *AuthService) RemoveDevice(deviceID string) error {
-	// TODO: Remove device from database
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	if _, exists := a.devices[deviceID]; !exists {
+		return fmt.Errorf("device not found")
+	}
+
+	delete(a.devices, deviceID)
 	a.logger.WithField("device_id", deviceID).Info("Device removed")
 	return nil
 }
 
 func (a *AuthService) IsDeviceTrusted(deviceID string) bool {
-	// TODO: Check if device is trusted in database
-	return false
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	device, exists := a.devices[deviceID]
+	if !exists {
+		return false
+	}
+
+	return device.Trusted
 }
 
 func generateRandomToken(length int) (string, error) {

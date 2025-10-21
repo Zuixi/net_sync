@@ -1,0 +1,3 @@
+这是一个测试文件，用于验证easy-sync的文件上传功能。
+Test file for easy-sync file upload verification.
+创建时间：2025-10-22

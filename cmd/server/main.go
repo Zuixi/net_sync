@@ -61,7 +61,13 @@ func main() {
 		"discovery":   cfg.Discovery.Enabled,
 	}).Info("Configuration loaded")
 
-	// Print pairing information
+	// Create server first to generate the pairing token
+	srv, err := server.NewServer(cfg, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to create server")
+	}
+
+	// Print pairing information after server creation
 	logger.WithFields(logrus.Fields{
 		"pairing_token": cfg.Security.PairingToken,
 		"address":       cfg.GetAddr(),
@@ -77,12 +83,6 @@ func main() {
 		} else {
 			logger.Info("mDNS discovery started")
 		}
-	}
-
-	// Create server
-	srv, err := server.NewServer(cfg, logger)
-	if err != nil {
-		logger.WithError(err).Fatal("Failed to create server")
 	}
 
 	// Start WebSocket manager

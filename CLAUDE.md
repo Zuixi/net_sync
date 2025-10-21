@@ -222,3 +222,4 @@ npm run test:performance
 - network request,should set http proxy first:
 `$env:HTTP_PROXY="http://127.0.0.1:13824"`
 `$env:HTTPS_PROXY="http://127.0.0.1:13824"`
+- 总是用中文回答

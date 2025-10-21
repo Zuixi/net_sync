@@ -60,7 +60,7 @@ func NewTusHandler(cfg *config.Config, logger *logrus.Logger) (*TusHandler, erro
 
 	tusHandler, err := handler.NewHandler(handler.Config{
 		StoreComposer:           composer,
-		BasePath:                "/tus/",
+		BasePath:                "/tus/files",
 		MaxSize:                 cfg.Storage.MaxSize,
 		NotifyCompleteUploads:   true,
 		NotifyTerminatedUploads: true,
@@ -96,6 +96,7 @@ func (h *TusHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		"remote": r.RemoteAddr,
 	}).Info("TUS upload request")
 
+	// Use a custom HTTP handler to ensure proper routing
 	h.handler.ServeHTTP(w, r)
 }
 

@@ -159,6 +159,10 @@ func LoadFromEnv(config *Config) {
 		config.Security.JWTSecret = jwtSecret
 	}
 
+	if pairingToken := os.Getenv("EASY_SYNC_PAIRING_TOKEN"); pairingToken != "" {
+		config.Security.PairingToken = pairingToken
+	}
+
 	if logLevel := os.Getenv("EASY_SYNC_LOG_LEVEL"); logLevel != "" {
 		config.Logging.Level = logLevel
 	}

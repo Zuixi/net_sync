@@ -120,7 +120,11 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/ws", func(c *gin.Context) { s.wsManager.HandleWebSocket(c.Writer, c.Request) })
 
 	// TUS file upload endpoints
-	s.router.Any("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
+	s.router.POST("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
+	s.router.PATCH("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
+	s.router.HEAD("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
+	s.router.GET("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
+	s.router.OPTIONS("/tus/*filepath", func(c *gin.Context) { s.tusHandler.HandleRequest(c.Writer, c.Request) })
 
 	// File download endpoint
 	s.router.GET("/files/:id", func(c *gin.Context) { s.downloadHandler.HandleDownload(c.Writer, c.Request) })
@@ -271,6 +275,13 @@ func (s *Server) pairDevice(c *gin.Context) {
 		return
 	}
 
+	// Create device record
+	_, err := s.auth.CreateDevice(request.DeviceID, request.DeviceName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to create device"})
+		return
+	}
+
 	token, err := s.auth.GenerateDeviceToken(request.DeviceID, request.DeviceName)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to generate token"})
@@ -284,13 +295,28 @@ func (s *Server) pairDevice(c *gin.Context) {
 }
 
 func (s *Server) listDevices(c *gin.Context) {
-	// TODO: Implement device listing
-	c.JSON(200, gin.H{"devices": []interface{}{}})
+	devices, err := s.auth.ListDevices()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to list devices"})
+		return
+	}
+
+	c.JSON(200, gin.H{"devices": devices})
 }
 
 func (s *Server) removeDevice(c *gin.Context) {
 	deviceID := c.Param("id")
-	// TODO: Implement device removal
+
+	err := s.auth.RemoveDevice(deviceID)
+	if err != nil {
+		if err.Error() == "device not found" {
+			c.JSON(404, gin.H{"error": "Device not found"})
+		} else {
+			c.JSON(500, gin.H{"error": "Failed to remove device"})
+		}
+		return
+	}
+
 	c.JSON(200, gin.H{"message": fmt.Sprintf("Device %s removed", deviceID)})
 }
 
