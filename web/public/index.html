@@ -8,12 +8,18 @@
     <meta name="theme-color" content="#4a90e2">
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- Font: Inter -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+
+    <!-- Tailwind (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Icons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 
     <!-- Styles -->
     <style>
@@ -24,7 +30,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: #333;
@@ -565,10 +571,44 @@
                     const progressBar = document.getElementById(`progress-${file.name.replace(/[^a-zA-Z0-9]/g, '')}`);
                     if (progressBar) {
                         progressBar.style.width = percentage + '%';
+                        const now = Date.now();
+                        if (!progressBar._lastTime) {
+                            progressBar._lastTime = now;
+                            progressBar._lastUploaded = bytesUploaded;
+                        } else {
+                            const dt = (now - progressBar._lastTime) / 1000;
+                            const du = bytesUploaded - progressBar._lastUploaded;
+                            if (dt > 0) {
+                                const speed = du / dt; // bytes per second
+                                let speedEl = progressBar.parentElement.parentElement.querySelector('.upload-speed');
+                                if (!speedEl) {
+                                    speedEl = document.createElement('div');
+                                    speedEl.className = 'upload-speed';
+                                    speedEl.style.marginTop = '6px';
+                                    speedEl.style.color = '#666';
+                                    progressBar.parentElement.parentElement.appendChild(speedEl);
+                                }
+                                speedEl.textContent = `Uploading: ${formatFileSize(speed)}/s (${percentage}%)`;
+                            }
+                            progressBar._lastTime = now;
+                            progressBar._lastUploaded = bytesUploaded;
+                        }
                     }
                 },
                 onSuccess: function() {
                     console.log('Upload complete:', file.name);
+                    const url = upload.url || '';
+                    const id = (url.split('/').pop() || '').replace(/[^a-zA-Z0-9_-]/g, '');
+                    if (id) {
+                        const actions = document.createElement('div');
+                        actions.style.display = 'flex';
+                        actions.style.gap = '8px';
+                        actions.innerHTML = `
+                            <button class="btn btn-secondary" onclick="verifyFile('${id}')">Verify</button>
+                            <button class="btn" onclick="downloadFile('${id}')">Download</button>
+                        `;
+                        fileItem.appendChild(actions);
+                    }
                 }
             });
 
@@ -617,8 +657,12 @@
                 .then(data => {
                     if (data.token) {
                         authToken = data.token;
+                        localStorage.setItem('easy_sync_token', data.token);
                         connectWebSocket(data.token);
+                        loadFiles();
                         document.getElementById('pairingSection').style.display = 'none';
+                    } else {
+                        console.error('Pairing succeeded without token:', data);
                     }
                 })
                 .catch(error => {
@@ -646,10 +690,13 @@
         }
 
         function checkConnection() {
-            // Check if we have a stored token
             const storedToken = localStorage.getItem('easy_sync_token');
-            if (storedToken && !isConnected) {
-                connectWebSocket(storedToken);
+            if (storedToken) {
+                authToken = storedToken;
+                if (!isConnected) {
+                    connectWebSocket(storedToken);
+                }
+                loadFiles();
             }
         }
 
@@ -683,8 +730,74 @@
             console.log('File offer received:', fileOffer);
         }
 
+        // Files API
+        function loadFiles() {
+            if (!authToken) return;
+            fetch('/api/files', {
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            })
+            .then(res => res.json())
+            .then(data => {
+                renderDownloadList(data.files || []);
+            })
+            .catch(err => console.error('Load files failed:', err));
+        }
+
+        function renderDownloadList(files) {
+            const list = document.getElementById('downloadList');
+            list.innerHTML = '';
+            if (!files.length) {
+                list.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No files available for download</p>';
+                return;
+            }
+            files.forEach((f) => {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name">${f.name || f.id}</div>
+                        <div class="file-meta">${formatFileSize(f.size || 0)}</div>
+                        <div class="progress-bar"><div class="progress-fill" id="progress-${(f.id || f.name || 'file').replace(/[^a-zA-Z0-9]/g, '')}" style="width:0%"></div></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class=\"btn btn-secondary\" onclick=\"verifyFile('${f.id}')\">Verify</button>
+                        <button class=\"btn\" onclick=\"downloadFile('${f.id}')\">Download</button>
+                        <button class=\"btn btn-secondary\" onclick=\"deleteFile('${f.id}')\">Delete</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function downloadFile(id) {
+            window.open('/files/' + id, '_blank');
+        }
+
+        function verifyFile(id) {
+            fetch('/files/' + id + '/sha256')
+            .then(res => res.json())
+            .then(data => alert('SHA-256: ' + (data.sha256 || 'unknown')))
+            .catch(err => console.error('Verify failed:', err));
+        }
+
+        function deleteFile(id) {
+            fetch('/api/files/' + id, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + authToken }
+            })
+            .then(() => loadFiles())
+            .catch(err => console.error('Delete failed:', err));
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', init);
+    </script>
+
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js').catch((err) => console.error('SW register failed:', err));
+      }
     </script>
 
     <!-- TUS client library for resumable uploads -->

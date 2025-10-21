@@ -18,8 +18,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **TLS**: Self-signed certificate generation with SHA-256 fingerprint display
 - **Performance**: sendfile, Gzip/Brotli compression, HTTP/2 support
 
-### Frontend (Vue.js)
-- **Framework**: Vue.js for single-page application
+### Frontend (Next.js)
+- **Framework**: Next.js for server-side rendering and static site generation
 - **File Upload**: tus-js-client for resumable uploads
 - **Real-time Communication**: Browser native WebSocket API
 - **PWA**: Web app manifest + service worker for offline capabilities and home screen installation
@@ -68,7 +68,7 @@ GOOS=darwin GOARCH=arm64 go build -o easy-sync-mac ./cmd/server
 GOOS=linux GOARCH=amd64 go build -o easy-sync-linux ./cmd/server
 ```
 
-### Frontend (Vue.js)
+### Frontend (Next.js)
 ```bash
 # Install dependencies
 npm install
