@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -179,6 +180,43 @@ func (c *Config) EnsureDirectories() error {
 
 	if err := os.MkdirAll(c.Storage.DataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	return nil
+}
+
+// WritePairingInfo writes pairing information to a file for easy user access
+func (c *Config) WritePairingInfo(serverAddr string) error {
+	tokenFile := filepath.Join(c.Storage.DataDir, "pairing-token.txt")
+
+	protocol := "http"
+	if c.Server.HTTPS {
+		protocol = "https"
+	}
+
+	content := fmt.Sprintf(`========================================
+Easy Sync - 配对信息
+========================================
+服务器地址: %s://%s
+配对令牌: %s
+
+使用说明:
+  - 自动配对: 在同一网络打开网页自动连接
+  - 手动配对: 在网页中输入上述令牌
+
+生成时间: %s
+Token文件位置: %s
+========================================
+`,
+		protocol,
+		serverAddr,
+		c.Security.PairingToken,
+		time.Now().Format("2006-01-02 15:04:05"),
+		tokenFile,
+	)
+
+	if err := os.WriteFile(tokenFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write pairing token file: %w", err)
 	}
 
 	return nil

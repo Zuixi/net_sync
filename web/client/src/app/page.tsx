@@ -9,11 +9,14 @@ import Chat from "@/components/Chat";
 import Devices from "@/components/Devices";
 import { useApiConfig } from "@/lib/config";
 import { useAuth } from "@/lib/auth";
+import { useAutoPair } from "@/lib/auto-pair";
 
 export default function Home() {
   const { config, loading: cfgLoading, error: cfgError } = useApiConfig();
-  const { token } = useAuth();
+  const { token, loading: authLoading } = useAuth();
+  const { loading: pairLoading, error: pairError, autoPaired } = useAutoPair();
   const [tab, setTab] = useState<"upload" | "download" | "chat" | "devices">("upload");
+  const [showManualPairing, setShowManualPairing] = useState(false);
 
   useEffect(() => {
     if (cfgError) console.error("Config load error", cfgError);
@@ -45,17 +48,33 @@ export default function Home() {
       </header>
 
       <main className="max-w-5xl mx-auto w-full px-4 py-6 flex-1">
-        {cfgLoading && <p className="text-slate-400">正在加载配置...</p>}
-        {!cfgLoading && !token && (
+        {(cfgLoading || authLoading) && <p className="text-slate-400">正在加载...</p>}
+        {!authLoading && pairLoading && <p className="text-slate-400">正在自动连接...</p>}
+        {!authLoading && pairError && !showManualPairing && (
+          <div className="mb-6 rounded-lg border border-rose-800 bg-rose-900/20 p-4">
+            <p className="text-sm text-rose-400 mb-2">自动配对失败: {pairError}</p>
+            <button
+              onClick={() => setShowManualPairing(true)}
+              className="rounded-md bg-sky-600 px-3 py-2 text-sm hover:bg-sky-500"
+            >
+              手动配对
+            </button>
+          </div>
+        )}
+        {!authLoading && !cfgLoading && !token && showManualPairing && (
           <div className="mb-6">
             <Pairing />
           </div>
         )}
 
-        {tab === "upload" && <Uploader />}
-        {tab === "download" && <FileList />}
-        {tab === "chat" && <Chat />}
-        {tab === "devices" && <Devices />}
+        {!authLoading && token && (
+          <>
+            {tab === "upload" && <Uploader />}
+            {tab === "download" && <FileList />}
+            {tab === "chat" && <Chat />}
+            {tab === "devices" && <Devices />}
+          </>
+        )}
       </main>
 
       <footer className="sticky bottom-0 bg-slate-900/70 backdrop-blur border-t border-slate-800">

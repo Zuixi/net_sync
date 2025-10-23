@@ -5,10 +5,12 @@ const KEY = "easy_sync_token";
 
 export function useAuth() {
   const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const t = localStorage.getItem(KEY);
     if (t) setToken(t);
+    setLoading(false);
   }, []);
 
   function saveToken(t: string) {
@@ -21,5 +23,5 @@ export function useAuth() {
     setToken(null);
   }
 
-  return { token, saveToken, clearToken };
+  return { token, loading, saveToken, clearToken };
 }

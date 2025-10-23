@@ -36,6 +36,10 @@ export default function Pairing() {
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+      <h3 className="text-lg font-semibold mb-2">手动配对</h3>
+      <p className="text-sm text-slate-400 mb-4">
+        配对令牌可在服务器数据目录的 <code className="bg-slate-800 px-1 py-0.5 rounded">pairing-token.txt</code> 文件中找到
+      </p>
       <div className="flex gap-2">
         <input
           value={tokenInput}

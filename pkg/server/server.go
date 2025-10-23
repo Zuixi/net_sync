@@ -101,6 +101,7 @@ func (s *Server) setupRoutes() {
 	{
 		// Device pairing and discovery
 		api.GET("/qr", s.auth.RequireAuth(), s.generateQR)
+		api.GET("/pairing-token", s.getPairingToken) // No auth required for auto-pairing
 		api.POST("/pair", s.pairDevice)
 		api.GET("/devices", s.auth.RequireAuth(), s.listDevices)
 		api.DELETE("/devices/:id", s.auth.RequireAuth(), s.removeDevice)
@@ -193,6 +194,13 @@ outer:
 		Handler: s.router,
 	}
 
+	// Write pairing information to file with actual bound address
+	if err := s.config.WritePairingInfo(finalAddr); err != nil {
+		s.logger.WithError(err).Warn("Failed to write pairing token file")
+	} else {
+		s.logger.Info("Pairing token written to file")
+	}
+
 	// Print final address to console
 	fmt.Printf("\n🚀 Easy-Sync Server is running at: %s\n", finalAddr)
 	if s.config.Server.HTTPS {
@@ -256,6 +264,19 @@ func (s *Server) generateQR(c *gin.Context) {
 	}
 
 	c.JSON(200, qrData)
+}
+
+func (s *Server) getPairingToken(c *gin.Context) {
+	protocol := "http"
+	if s.config.Server.HTTPS {
+		protocol = "https"
+	}
+
+	c.JSON(200, gin.H{
+		"token":      s.config.Security.PairingToken,
+		"server_url": fmt.Sprintf("%s://%s", protocol, s.finalAddr),
+		"timestamp":  time.Now().Unix(),
+	})
 }
 
 func (s *Server) pairDevice(c *gin.Context) {
