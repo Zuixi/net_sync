@@ -1,61 +1,16 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useAuth } from "@/lib/auth";
-
-interface ChatMessage {
-  type: string;
-  id?: string;
-  from?: string;
-  text?: string;
-  timestamp?: number;
-  device?: string;
-}
+import { useWebSocket, ChatMessage } from "@/lib/websocket-context";
 
 export default function Chat() {
   const { token } = useAuth();
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [deviceName] = useState(
-    navigator.userAgent.includes("Mobile") ? "移动设备" : "网页浏览器"
-  );
+  const { messages, sendMessage, connected } = useWebSocket();
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!token) return;
-    const url = new URL(window.location.origin);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = "/ws";
-    url.searchParams.set("token", token);
-
-    const socket = new WebSocket(url.toString());
-    setWs(socket);
-
-    socket.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data) as ChatMessage;
-        setMessages((m) => [msg, ...m].slice(0, 200));
-      } catch {
-        // 如果不是JSON,当作文本消息处理
-        setMessages((m) => [{ type: "text", text: ev.data }, ...m].slice(0, 200));
-      }
-    };
-    socket.onopen = () => {
-      setMessages((m) => [{ type: "system", text: "已连接" }, ...m]);
-      // 发送hello消息
-      socket.send(JSON.stringify({
-        type: "hello",
-        device: deviceName,
-        capabilities: ["upload", "download", "chat"],
-      }));
-    };
-    socket.onclose = () => setMessages((m) => [{ type: "system", text: "连接断开" }, ...m]);
-
-    return () => socket.close();
-  }, [token, deviceName]);
 
   function send() {
     const v = inputRef.current?.value?.trim();
-    if (!v || !ws) return;
+    if (!v || !connected) return;
 
     const msg = {
       type: "chat",
@@ -64,7 +19,7 @@ export default function Chat() {
       timestamp: Date.now(),
     };
 
-    ws.send(JSON.stringify(msg));
+    sendMessage(msg);
     inputRef.current!.value = "";
   }
 

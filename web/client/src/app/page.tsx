@@ -8,10 +8,11 @@ import FileList from "@/components/FileList";
 import Chat from "@/components/Chat";
 import Devices from "@/components/Devices";
 import { useApiConfig } from "@/lib/config";
-import { useAuth } from "@/lib/auth";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { useAutoPair } from "@/lib/auto-pair";
+import { WebSocketProvider } from "@/lib/websocket-context";
 
-export default function Home() {
+function HomeContent() {
   const { config, loading: cfgLoading, error: cfgError } = useApiConfig();
   const { token, loading: authLoading } = useAuth();
   const { loading: pairLoading, error: pairError, autoPaired } = useAutoPair();
@@ -36,46 +37,46 @@ export default function Home() {
           <h1 className="text-xl font-semibold">Easy Sync</h1>
           <div className="ml-auto"><StatusBar /></div>
         </div>
-        <nav className="max-w-5xl mx-auto px-4 pb-3 flex gap-2">
-          {tabs.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition
-              ${tab === key ? "bg-sky-600/20 text-sky-400 border border-sky-700" : "hover:bg-slate-800"}`}>
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
-        </nav>
-      </header>
+      <nav className="max-w-5xl mx-auto px-4 pb-3 flex gap-2">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition
+            ${tab === key ? "bg-sky-600/20 text-sky-400 border border-sky-700" : "hover:bg-slate-800"}`}>
+            <Icon className="w-4 h-4" /> {label}
+          </button>
+        ))}
+      </nav>
+    </header>
 
-      <main className="max-w-5xl mx-auto w-full px-4 py-6 flex-1">
-        {(cfgLoading || authLoading) && <p className="text-slate-400">正在加载...</p>}
-        {!authLoading && pairLoading && <p className="text-slate-400">正在自动连接...</p>}
-        {!authLoading && pairError && !showManualPairing && (
-          <div className="mb-6 rounded-lg border border-rose-800 bg-rose-900/20 p-4">
-            <p className="text-sm text-rose-400 mb-2">自动配对失败: {pairError}</p>
-            <button
-              onClick={() => setShowManualPairing(true)}
-              className="rounded-md bg-sky-600 px-3 py-2 text-sm hover:bg-sky-500"
-            >
-              手动配对
-            </button>
-          </div>
-        )}
-        {!authLoading && !cfgLoading && !token && showManualPairing && (
-          <div className="mb-6">
-            <Pairing />
-          </div>
-        )}
+    <main className="max-w-5xl mx-auto w-full px-4 py-6 flex-1">
+      {(cfgLoading || authLoading) && <p className="text-slate-400">正在加载...</p>}
+      {!authLoading && pairLoading && <p className="text-slate-400">正在自动连接...</p>}
+      {!authLoading && pairError && !showManualPairing && (
+        <div className="mb-6 rounded-lg border border-rose-800 bg-rose-900/20 p-4">
+          <p className="text-sm text-rose-400 mb-2">自动配对失败: {pairError}</p>
+          <button
+            onClick={() => setShowManualPairing(true)}
+            className="rounded-md bg-sky-600 px-3 py-2 text-sm hover:bg-sky-500"
+          >
+            手动配对
+          </button>
+        </div>
+      )}
+      {!authLoading && !cfgLoading && !token && showManualPairing && (
+        <div className="mb-6">
+          <Pairing />
+        </div>
+      )}
 
-        {!authLoading && token && (
-          <>
-            {tab === "upload" && <Uploader />}
-            {tab === "download" && <FileList />}
-            {tab === "chat" && <Chat />}
-            {tab === "devices" && <Devices />}
-          </>
-        )}
-      </main>
+      {!authLoading && token && (
+        <>
+          {tab === "upload" && <Uploader />}
+          {tab === "download" && <FileList />}
+          {tab === "chat" && <Chat />}
+          {tab === "devices" && <Devices />}
+        </>
+      )}
+    </main>
 
       <footer className="sticky bottom-0 bg-slate-900/70 backdrop-blur border-t border-slate-800">
         <div className="max-w-5xl mx-auto px-4 py-3 text-sm text-slate-400">
@@ -83,5 +84,15 @@ export default function Home() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthProvider>
+      <WebSocketProvider>
+        <HomeContent />
+      </WebSocketProvider>
+    </AuthProvider>
   );
 }

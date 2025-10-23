@@ -26,7 +26,11 @@
       "Bash(./easy-sync.exe)",
       "Read(//c/Users/wqzha/EasySync/Data/**)",
       "mcp__playwright__browser_console_messages",
-      "mcp__playwright__browser_take_screenshot"
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_close",
+      "Bash(node test-multi-client.mjs:*)",
+      "mcp__playwright__browser_evaluate",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

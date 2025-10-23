@@ -208,17 +208,36 @@ func (m *Manager) unregisterClient(client *Client) {
 
 func (m *Manager) broadcastMessage(message Message) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	// 创建需要清理的客户端列表
+	var toRemove []string
+	clients := make([]*Client, 0, len(m.clients))
 	for _, client := range m.clients {
+		clients = append(clients, client)
+	}
+	m.mu.RUnlock()
+
+	// 不持锁发送消息
+	for _, client := range clients {
 		if client.IsConnected {
 			select {
 			case client.Send <- message:
 			default:
-				close(client.Send)
-				delete(m.clients, client.ID)
+				// 发送失败,标记需要删除
+				toRemove = append(toRemove, client.ID)
 			}
 		}
+	}
+
+	// 如果有需要删除的客户端,获取写锁并删除
+	if len(toRemove) > 0 {
+		m.mu.Lock()
+		for _, id := range toRemove {
+			if client, ok := m.clients[id]; ok {
+				close(client.Send)
+				delete(m.clients, id)
+			}
+		}
+		m.mu.Unlock()
 	}
 }
 
