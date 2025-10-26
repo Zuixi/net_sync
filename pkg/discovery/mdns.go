@@ -48,7 +48,7 @@ func NewMDnsDiscovery(cfg *config.Config, logger *logrus.Logger) *MDnsDiscovery 
 }
 
 func (m *MDnsDiscovery) Start() error {
-	if !m.config.Discovery.Enabled {
+	if !m.config.MDNS.Enabled {
 		m.logger.Info("mDNS discovery is disabled")
 		return nil
 	}
@@ -59,7 +59,7 @@ func (m *MDnsDiscovery) Start() error {
 
 	// Create TXT record with service information
 	txt := []string{
-		fmt.Sprintf("device_name=%s", m.config.Discovery.DeviceName),
+		fmt.Sprintf("device_name=%s", m.config.MDNS.DeviceName),
 		fmt.Sprintf("port=%d", m.config.Server.Port),
 		"supports=http",
 	}
@@ -70,8 +70,8 @@ func (m *MDnsDiscovery) Start() error {
 
 	// Register the service
 	server, err := zeroconf.Register(
-		m.config.Discovery.DeviceName,
-		m.config.Discovery.ServiceName,
+		m.config.MDNS.DeviceName,
+		m.config.MDNS.ServiceName,
 		"local.",
 		m.config.Server.Port,
 		txt,
@@ -86,8 +86,8 @@ func (m *MDnsDiscovery) Start() error {
 	m.isRunning = true
 
 	m.logger.WithFields(logrus.Fields{
-		"device_name":  m.config.Discovery.DeviceName,
-		"service_name": m.config.Discovery.ServiceName,
+		"device_name":  m.config.MDNS.DeviceName,
+		"service_name": m.config.MDNS.ServiceName,
 		"port":         m.config.Server.Port,
 	}).Info("mDNS service registered")
 
@@ -126,7 +126,7 @@ func (m *MDnsDiscovery) browseServices() {
 		}
 	}()
 
-	err := m.resolver.Browse(m.ctx, m.config.Discovery.ServiceName, "local.", entries)
+	err := m.resolver.Browse(m.ctx, m.config.MDNS.ServiceName, "local.", entries)
 	if err != nil {
 		m.logger.WithError(err).Error("Failed to browse mDNS services")
 		return
@@ -137,7 +137,7 @@ func (m *MDnsDiscovery) browseServices() {
 
 func (m *MDnsDiscovery) handleServiceEntry(entry *zeroconf.ServiceEntry) {
 	// Skip our own service
-	if entry.Instance == m.config.Discovery.DeviceName {
+	if entry.Instance == m.config.MDNS.DeviceName {
 		return
 	}
 
@@ -180,7 +180,7 @@ func (m *MDnsDiscovery) parseServiceEntry(entry *zeroconf.ServiceEntry) *Service
 }
 
 func (m *MDnsDiscovery) DiscoverServices(timeout time.Duration) ([]*ServiceInfo, error) {
-	if !m.config.Discovery.Enabled {
+	if !m.config.MDNS.Enabled {
 		return nil, fmt.Errorf("mDNS discovery is disabled")
 	}
 
@@ -191,7 +191,7 @@ func (m *MDnsDiscovery) DiscoverServices(timeout time.Duration) ([]*ServiceInfo,
 	go func() {
 		for entry := range entries {
 			// Skip our own service
-			if entry.Instance == m.config.Discovery.DeviceName {
+			if entry.Instance == m.config.MDNS.DeviceName {
 				continue
 			}
 
@@ -204,7 +204,7 @@ func (m *MDnsDiscovery) DiscoverServices(timeout time.Duration) ([]*ServiceInfo,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := m.resolver.Browse(ctx, m.config.Discovery.ServiceName, "local.", entries)
+	err := m.resolver.Browse(ctx, m.config.MDNS.ServiceName, "local.", entries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to browse mDNS services: %w", err)
 	}
@@ -246,9 +246,9 @@ func (m *MDnsDiscovery) IsRunning() bool {
 }
 
 func (m *MDnsDiscovery) GetServiceName() string {
-	return m.config.Discovery.ServiceName
+	return m.config.MDNS.ServiceName
 }
 
 func (m *MDnsDiscovery) GetDeviceName() string {
-	return m.config.Discovery.DeviceName
+	return m.config.MDNS.DeviceName
 }

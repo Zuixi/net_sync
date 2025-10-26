@@ -125,7 +125,7 @@ func (m *Manager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		ID:          uuid.New().String(),
 		DeviceName:  claims.DeviceName,
 		Connection:  conn,
-		Send:        make(chan Message, 256),
+		Send:        make(chan Message, m.config.WebSocket.SendChannelBuffer),
 		Manager:     m,
 		LastPing:    time.Now(),
 		IsConnected: true,
@@ -144,7 +144,13 @@ func (m *Manager) Start() {
 }
 
 func (m *Manager) run() {
-	ticker := time.NewTicker(time.Duration(m.config.WebSocket.PingPeriod) * time.Second)
+	pingPeriod, err := m.config.GetWebSocketPingPeriod()
+	if err != nil {
+		m.logger.WithError(err).Warn("Invalid WebSocket ping period, using default 30s")
+		pingPeriod = 30 * time.Second
+	}
+
+	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
 
 	for {
@@ -178,7 +184,7 @@ func (m *Manager) registerClient(client *Client) {
 	// Send welcome message
 	welcome := Message{
 		Type:      MessageTypeHello,
-		Device:    m.config.Discovery.DeviceName,
+		Device:    m.config.MDNS.DeviceName,
 		Timestamp: time.Now().Unix(),
 	}
 
@@ -245,13 +251,20 @@ func (m *Manager) checkConnections() {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	pingPeriod, err := m.config.GetWebSocketPingPeriod()
+	if err != nil {
+		m.logger.WithError(err).Warn("Invalid WebSocket ping period, using default 30s")
+		pingPeriod = 30 * time.Second
+	}
+
 	for _, client := range m.clients {
 		client.mu.RLock()
 		isConnected := client.IsConnected
 		lastPing := client.LastPing
 		client.mu.RUnlock()
 
-		if !isConnected || time.Since(lastPing) > time.Duration(m.config.WebSocket.PingPeriod*2)*time.Second {
+		pingTimeout := pingPeriod * 2
+		if !isConnected || time.Since(lastPing) > pingTimeout {
 			m.unregister <- client
 		} else {
 			// Send ping
@@ -275,13 +288,19 @@ func (c *Client) readPump() {
 		c.Connection.Close()
 	}()
 
-	c.Connection.SetReadLimit(512)
-	c.Connection.SetReadDeadline(time.Now().Add(60 * time.Second))
+	readTimeout, err := c.Manager.config.GetWebSocketReadTimeout()
+	if err != nil {
+		c.Manager.logger.WithError(err).Warn("Invalid WebSocket read timeout, using default 60s")
+		readTimeout = 60 * time.Second
+	}
+
+	c.Connection.SetReadLimit(c.Manager.config.WebSocket.ReadLimit)
+	c.Connection.SetReadDeadline(time.Now().Add(readTimeout))
 	c.Connection.SetPongHandler(func(string) error {
 		c.mu.Lock()
 		c.LastPing = time.Now()
 		c.mu.Unlock()
-		c.Connection.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.Connection.SetReadDeadline(time.Now().Add(readTimeout))
 		return nil
 	})
 
@@ -300,7 +319,19 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	pingMessageInterval, err := c.Manager.config.GetWebSocketPingMessageInterval()
+	if err != nil {
+		c.Manager.logger.WithError(err).Warn("Invalid WebSocket ping message interval, using default 54s")
+		pingMessageInterval = 54 * time.Second
+	}
+
+	writeTimeout, err := c.Manager.config.GetWebSocketWriteTimeout()
+	if err != nil {
+		c.Manager.logger.WithError(err).Warn("Invalid WebSocket write timeout, using default 10s")
+		writeTimeout = 10 * time.Second
+	}
+
+	ticker := time.NewTicker(pingMessageInterval)
 	defer func() {
 		ticker.Stop()
 		c.Connection.Close()
@@ -309,7 +340,7 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Connection.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.Connection.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if !ok {
 				c.Connection.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -321,7 +352,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.Connection.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.Connection.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if err := c.Connection.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

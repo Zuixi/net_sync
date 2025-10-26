@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
 import { useAuth } from "./auth";
+import { getWebSocketURL, WEBSOCKET_CONFIG } from "./config";
 
 export interface ChatMessage {
   type: string;
@@ -16,6 +17,7 @@ interface WebSocketContextType {
   messages: ChatMessage[];
   sendMessage: (message: any) => void;
   clearMessages: () => void;
+  deviceName: string;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -38,9 +40,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const [deviceName] = useState(
-    navigator.userAgent.includes("Mobile") ? "移动设备" : "网页浏览器"
-  );
+  const messageIdsRef = useRef<Set<string>>(new Set()); // 用于消息去重
+
+  // 从 localStorage 读取设备名称
+  const [deviceName] = useState(() => {
+    if (typeof window === 'undefined') return "网页浏览器";
+    return localStorage.getItem("easy_sync_device_name") ||
+      (navigator.userAgent.includes("Mobile") ? "移动设备" : "网页浏览器");
+  });
 
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -65,10 +72,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     console.log("开始建立WebSocket连接...");
     const connectWebSocket = () => {
       // 尝试通过相对路径连接(在同一端口),如果失败则直接连接到3280
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = window.location.hostname;
-      const port = "3280"; // 直接连接到Go服务器
-      const wsUrl = `${protocol}//${host}:${port}/ws?token=${encodeURIComponent(token)}`;
+      const wsUrl = `${getWebSocketURL()}?token=${encodeURIComponent(token)}`;
 
       console.log("WebSocket URL:", wsUrl);
       const socket = new WebSocket(wsUrl);
@@ -77,7 +81,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       socket.onopen = () => {
         console.log("WebSocket connected");
         setConnected(true);
-        setMessages((m) => [{ type: "system", text: "已连接" }, ...m]);
+
+        // 添加系统消息，带唯一 ID
+        const connectMsg = {
+          type: "system",
+          id: `sys_connected_${Date.now()}`,
+          text: "已连接"
+        };
+        setMessages((m) => [connectMsg, ...m]);
 
         // 发送hello消息
         socket.send(JSON.stringify({
@@ -90,10 +101,27 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       socket.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data) as ChatMessage;
-          setMessages((m) => [msg, ...m].slice(0, 200));
+
+          // 消息去重：根据消息 ID 去重
+          if (msg.id && messageIdsRef.current.has(msg.id)) {
+            console.log("重复消息，忽略:", msg.id);
+            return;
+          }
+
+          // 记录消息 ID
+          if (msg.id) {
+            messageIdsRef.current.add(msg.id);
+            // 限制集合大小，防止内存泄漏
+            if (messageIdsRef.current.size > WEBSOCKET_CONFIG.MESSAGE_HISTORY_LIMIT) {
+              const firstId = messageIdsRef.current.values().next().value;
+              messageIdsRef.current.delete(firstId);
+            }
+          }
+
+          setMessages((m) => [msg, ...m].slice(0, WEBSOCKET_CONFIG.MESSAGE_HISTORY_LIMIT));
         } catch {
           // 如果不是JSON,当作文本消息处理
-          setMessages((m) => [{ type: "text", text: ev.data }, ...m].slice(0, 200));
+          setMessages((m) => [{ type: "text", text: ev.data }, ...m].slice(0, WEBSOCKET_CONFIG.MESSAGE_HISTORY_LIMIT));
         }
       };
 
@@ -105,7 +133,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       socket.onclose = (event) => {
         console.log("WebSocket closed:", event.code, event.reason);
         setConnected(false);
-        setMessages((m) => [{ type: "system", text: "连接断开" }, ...m]);
+
+        // 添加系统消息，带唯一 ID
+        const disconnectMsg = {
+          type: "system",
+          id: `sys_disconnected_${Date.now()}`,
+          text: "连接断开"
+        };
+        setMessages((m) => [disconnectMsg, ...m]);
         wsRef.current = null;
 
         // 自动重连(除非是正常关闭)
@@ -113,7 +148,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log("Attempting to reconnect...");
             connectWebSocket();
-          }, 3000);
+          }, WEBSOCKET_CONFIG.RECONNECT_DELAY);
         }
       };
     };
@@ -132,7 +167,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   }, [token, deviceName]);
 
   return (
-    <WebSocketContext.Provider value={{ connected, messages, sendMessage, clearMessages }}>
+    <WebSocketContext.Provider value={{ connected, messages, sendMessage, clearMessages, deviceName }}>
       {children}
     </WebSocketContext.Provider>
   );

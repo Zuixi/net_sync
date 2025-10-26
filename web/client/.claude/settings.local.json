@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//f/CodeSpaces/Programming/easy_sync//**)",
+      "Read(//f/CodeSpaces/Programming/easy_sync/**)",
+      "Bash(cat:*)",
+      "Bash(go get:*)",
+      "Bash($env:HTTP_PROXY=\"http://127.0.0.1:13824\")",
+      "Bash($env:HTTPS_PROXY=\"http://127.0.0.1:13824\")",
+      "Bash(HTTP_PROXY=\"http://127.0.0.1:13824\" HTTPS_PROXY=\"http://127.0.0.1:13824\" go get:*)",
+      "Bash(HTTP_PROXY=\"http://127.0.0.1:13824\" HTTPS_PROXY=\"http://127.0.0.1:13824\" go build:*)",
+      "Bash(go build:*)",
+      "Bash(./easy-sync.exe:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

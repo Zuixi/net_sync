@@ -53,9 +53,11 @@ data/
 
 # Configuration files with secrets
 config.json
+config.yaml
 .env
 .env.local
 .env.*.local
+pairing-token.txt
 
 # Temporary files
 tmp/

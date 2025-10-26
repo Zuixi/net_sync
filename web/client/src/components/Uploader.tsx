@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import * as tus from "tus-js-client";
 import { useAuth } from "@/lib/auth";
+import { UPLOAD_CONFIG } from "@/lib/config";
 
 function formatSize(n: number) {
   const units = ["B", "KB", "MB", "GB"];
@@ -16,7 +17,7 @@ export default function Uploader() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
-  function appendLog(s: string) { setLogs((l) => [s, ...l].slice(0, 10)); }
+  function appendLog(s: string) { setLogs((l) => [s, ...l].slice(0, UPLOAD_CONFIG.LOG_LIMIT)); }
 
   function pickFiles() { inputRef.current?.click(); }
 
@@ -24,8 +25,8 @@ export default function Uploader() {
     if (!files || !token) return;
     Array.from(files).forEach((file) => {
       const upload = new tus.Upload(file, {
-        endpoint: "/tus/files",
-        retryDelays: [0, 1000, 3000, 5000],
+        endpoint: UPLOAD_CONFIG.TUS_ENDPOINT,
+        retryDelays: UPLOAD_CONFIG.TUS_RETRY_DELAYS,
         metadata: { filename: file.name, filetype: file.type },
         headers: { Authorization: `Bearer ${token}` },
         onError: (err) => appendLog(`上传失败: ${err}`),

@@ -31,6 +31,7 @@ type TusHandler struct {
 type FileStore struct {
 	basePath string
 	logger   *logrus.Logger
+	config   *config.Config
 }
 
 type FileMeta struct {
@@ -48,6 +49,7 @@ func NewTusHandler(cfg *config.Config, logger *logrus.Logger) (*TusHandler, erro
 	store := &FileStore{
 		basePath: cfg.Storage.UploadDir,
 		logger:   logger,
+		config:   cfg,
 	}
 
 	// Ensure upload directory exists
@@ -58,10 +60,16 @@ func NewTusHandler(cfg *config.Config, logger *logrus.Logger) (*TusHandler, erro
 	composer := handler.NewStoreComposer()
 	store.useIn(composer)
 
+	maxSize, err := cfg.GetMaxFileSizeBytes()
+	if err != nil {
+		logger.WithError(err).Warn("Invalid max file size, using default 10GB")
+		maxSize = 10 * 1024 * 1024 * 1024
+	}
+
 	tusHandler, err := handler.NewHandler(handler.Config{
 		StoreComposer:           composer,
-		BasePath:                "/tus/files",
-		MaxSize:                 cfg.Storage.MaxSize,
+		BasePath:                cfg.TUS.BasePath,
+		MaxSize:                 maxSize,
 		NotifyCompleteUploads:   true,
 		NotifyTerminatedUploads: true,
 	})
@@ -120,7 +128,7 @@ func (s *FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handl
 	}
 
 	// Create file path
-	filePath := filepath.Join(s.basePath, fileID+".part")
+	filePath := filepath.Join(s.basePath, fileID+s.config.TUS.TempSuffix)
 
 	// Create the file
 	file, err := os.Create(filePath)
@@ -148,7 +156,7 @@ func (s *FileStore) NewUpload(ctx context.Context, info handler.FileInfo) (handl
 }
 
 func (s *FileStore) GetUpload(ctx context.Context, id string) (handler.Upload, error) {
-	filePath := filepath.Join(s.basePath, id+".part")
+	filePath := filepath.Join(s.basePath, id+s.config.TUS.TempSuffix)
 
 	file, err := os.OpenFile(filePath, os.O_RDWR, 0644)
 	if err != nil {
@@ -305,7 +313,7 @@ func (u *FileUpload) Terminate(ctx context.Context) error {
 	}
 
 	// Remove metadata file if it exists
-	metaPath := filepath.Join(u.store.basePath, u.id+".meta")
+	metaPath := filepath.Join(u.store.basePath, u.id+u.store.config.TUS.MetaSuffix)
 	if err := os.Remove(metaPath); err != nil && !os.IsNotExist(err) {
 		u.store.logger.WithError(err).Warn("Failed to remove metadata file")
 	}
@@ -384,7 +392,7 @@ func (u *FileUpload) getDeviceFromMeta() string {
 }
 
 func (u *FileUpload) saveMetadata(meta FileMeta) error {
-	metaPath := filepath.Join(u.store.basePath, u.id+".meta")
+	metaPath := filepath.Join(u.store.basePath, u.id+u.store.config.TUS.MetaSuffix)
 
 	file, err := os.Create(metaPath)
 	if err != nil {

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowUpTrayIcon, ArrowDownTrayIcon, ChatBubbleLeftRightIcon, DevicePhoneMobileIcon } from "@heroicons/react/24/outline";
 import Pairing from "@/components/Pairing";
 import StatusBar from "@/components/StatusBar";
@@ -7,21 +7,15 @@ import Uploader from "@/components/Uploader";
 import FileList from "@/components/FileList";
 import Chat from "@/components/Chat";
 import Devices from "@/components/Devices";
-import { useApiConfig } from "@/lib/config";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { useAutoPair } from "@/lib/auto-pair";
 import { WebSocketProvider } from "@/lib/websocket-context";
 
 function HomeContent() {
-  const { config, loading: cfgLoading, error: cfgError } = useApiConfig();
   const { token, loading: authLoading } = useAuth();
-  const { loading: pairLoading, error: pairError, autoPaired } = useAutoPair();
+  const { loading: pairLoading, error: pairError } = useAutoPair();
   const [tab, setTab] = useState<"upload" | "download" | "chat" | "devices">("upload");
   const [showManualPairing, setShowManualPairing] = useState(false);
-
-  useEffect(() => {
-    if (cfgError) console.error("Config load error", cfgError);
-  }, [cfgError]);
 
   const tabs = useMemo(() => ([
     { key: "upload" as const, label: "上传", icon: ArrowUpTrayIcon },
@@ -49,7 +43,7 @@ function HomeContent() {
     </header>
 
     <main className="max-w-5xl mx-auto w-full px-4 py-6 flex-1">
-      {(cfgLoading || authLoading) && <p className="text-slate-400">正在加载...</p>}
+      {authLoading && <p className="text-slate-400">正在加载...</p>}
       {!authLoading && pairLoading && <p className="text-slate-400">正在自动连接...</p>}
       {!authLoading && pairError && !showManualPairing && (
         <div className="mb-6 rounded-lg border border-rose-800 bg-rose-900/20 p-4">
@@ -62,7 +56,7 @@ function HomeContent() {
           </button>
         </div>
       )}
-      {!authLoading && !cfgLoading && !token && showManualPairing && (
+      {!authLoading && !token && showManualPairing && (
         <div className="mb-6">
           <Pairing />
         </div>

@@ -1,0 +1,103 @@
+# EasySync 配置文件示例
+# 复制此文件为 config.yaml 并根据需要修改配置项
+
+# 服务器配置
+server:
+  # 监听地址，0.0.0.0 表示监听所有网卡
+  host: "0.0.0.0"
+  # 服务器监听端口
+  port: 3280
+  # 服务器优雅关闭超时时间
+  shutdown_timeout: 30s
+
+# 存储配置
+storage:
+  # 文件上传目录，支持 ~ 表示用户主目录
+  upload_dir: "~/EasySync/Uploads"
+  # 数据存储目录
+  data_dir: "~/EasySync/Data"
+  # 单个文件最大大小 (支持单位: B, KB, MB, GB, TB)
+  max_file_size: "10GB"
+  # 配对令牌文件名
+  pairing_token_file: "pairing-token.txt"
+
+# WebSocket 配置
+websocket:
+  # 读缓冲区大小 (字节)
+  read_buffer_size: 1024
+  # 写缓冲区大小 (字节)
+  write_buffer_size: 1024
+  # WebSocket 读取超时时间
+  read_timeout: 60s
+  # WebSocket 写入超时时间
+  write_timeout: 10s
+  # Ping 消息发送周期
+  ping_period: 30s
+  # Ping 消息具体发送间隔
+  ping_message_interval: 54s
+  # 单条消息最大读取限制 (字节)
+  read_limit: 512
+  # 发送通道缓冲区大小
+  send_channel_buffer: 256
+
+# 安全配置
+security:
+  # JWT Token 过期时间 (支持单位: s, m, h)
+  jwt_token_expiry: 1440m  # 24小时
+  # JWT 签名密钥 (留空自动生成，生产环境建议手动设置)
+  jwt_secret: ""
+  # 设备配对令牌 (留空自动生成)
+  pairing_token: ""
+  # JWT 发行者标识
+  jwt_issuer: "easy-sync"
+  # JWT 密钥生成失败时的后备值 (生产环境务必修改!)
+  fallback_jwt_secret: "fallback-secret-change-in-production"
+  # 配对令牌生成失败时的后备值 (生产环境务必修改!)
+  fallback_pairing_token: "fallback-token"
+
+# mDNS 服务发现配置
+mdns:
+  # 是否启用 mDNS 服务发现
+  enabled: true
+  # mDNS 服务类型名称
+  service_name: "_lanxfer._tcp"
+  # 设备名称 (留空则使用系统主机名)
+  device_name: ""
+
+# TUS 文件上传协议配置
+tus:
+  # TUS API 基础路径
+  base_path: "/tus/files"
+  # 上传临时文件后缀
+  temp_suffix: ".part"
+  # 元数据文件后缀
+  meta_suffix: ".meta"
+
+# CORS 跨域配置
+cors:
+  # 允许的源 (* 表示允许所有源，生产环境建议具体指定)
+  allowed_origins:
+    - "*"
+  # 允许的 HTTP 方法
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "PATCH"
+    - "OPTIONS"
+  # 允许的请求头
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Content-Length"
+    - "Accept-Encoding"
+    - "X-CSRF-Token"
+    - "Authorization"
+
+# 日志配置
+logging:
+  # 日志级别: debug, info, warn, error
+  level: "info"
+  # 日志格式: json, text
+  format: "json"

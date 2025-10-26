@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,36 +16,50 @@ import (
 )
 
 func main() {
-	// Initialize logger
-	logger := logrus.New()
+	// Parse command-line flags
+	configPath := flag.String("config", "", "Path to configuration file (YAML)")
+	showVersion := flag.Bool("version", false, "Show version information")
+	flag.Parse()
 
-	// Try to load log level from environment
-	logLevel := os.Getenv("EASY_SYNC_LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "info"
+	// Show version if requested
+	if *showVersion {
+		fmt.Println("EasySync Server v1.0.0")
+		os.Exit(0)
 	}
 
-	level, err := logrus.ParseLevel(logLevel)
+	// Initialize logger
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	logger.SetLevel(logrus.InfoLevel)
+
+	logger.Info("Starting Easy Sync Server")
+
+	// Load configuration with priority: config file > env vars > defaults
+	cfg, err := config.Load(*configPath)
 	if err != nil {
+		logger.WithError(err).Fatal("Failed to load configuration")
+	}
+
+	// Log the config source
+	if *configPath != "" {
+		logger.WithField("config_file", *configPath).Info("Loaded configuration from file")
+	} else {
+		logger.Info("Using default configuration")
+	}
+
+	// Configure logger from config
+	level, err := logrus.ParseLevel(cfg.Logging.Level)
+	if err != nil {
+		logger.WithError(err).Warn("Invalid log level, using info")
 		level = logrus.InfoLevel
 	}
 	logger.SetLevel(level)
 
-	// Set log format
-	logFormat := os.Getenv("EASY_SYNC_LOG_FORMAT")
-	if logFormat == "json" {
+	if cfg.Logging.Format == "json" {
 		logger.SetFormatter(&logrus.JSONFormatter{})
-	} else {
-		logger.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp: true,
-		})
 	}
-
-	logger.Info("Starting Easy Sync Server")
-
-	// Load configuration
-	cfg := config.DefaultConfig()
-	config.LoadFromEnv(cfg)
 
 	// Ensure directories exist
 	if err := cfg.EnsureDirectories(); err != nil {
@@ -57,8 +73,8 @@ func main() {
 		"https":       cfg.Server.HTTPS,
 		"upload_dir":  cfg.Storage.UploadDir,
 		"data_dir":    cfg.Storage.DataDir,
-		"device_name": cfg.Discovery.DeviceName,
-		"discovery":   cfg.Discovery.Enabled,
+		"device_name": cfg.MDNS.DeviceName,
+		"discovery":   cfg.MDNS.Enabled,
 	}).Info("Configuration loaded")
 
 	// Create server first to generate the pairing token
@@ -75,7 +91,7 @@ func main() {
 
 	// Initialize mDNS discovery
 	var mdns *discovery.MDnsDiscovery
-	if cfg.Discovery.Enabled {
+	if cfg.MDNS.Enabled {
 		mdns = discovery.NewMDnsDiscovery(cfg, logger)
 		if err := mdns.Start(); err != nil {
 			logger.WithError(err).Error("Failed to start mDNS discovery")
@@ -104,8 +120,15 @@ func main() {
 	sig := <-sigChan
 	logger.WithField("signal", sig).Info("Received shutdown signal")
 
+	// Get shutdown timeout from config
+	shutdownTimeout, err := cfg.GetShutdownTimeout()
+	if err != nil {
+		logger.WithError(err).Warn("Invalid shutdown timeout, using default 30s")
+		shutdownTimeout = 30 * time.Second
+	}
+
 	// Create shutdown context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	// Shutdown gracefully

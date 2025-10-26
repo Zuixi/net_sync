@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { DEVICE_CONFIG } from "@/lib/config";
 
 export default function Pairing() {
   const [tokenInput, setTokenInput] = useState("");
@@ -18,7 +19,7 @@ export default function Pairing() {
         body: JSON.stringify({
           token: tokenInput.trim(),
           device_id: 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-          device_name: navigator.userAgent.includes("Mobile") ? "Mobile Device" : "Desktop Browser",
+          device_name: navigator.userAgent.includes("Mobile") ? DEVICE_CONFIG.MOBILE_NAME : DEVICE_CONFIG.DESKTOP_NAME,
         }),
       });
       const data = await res.json();

@@ -1,7 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { STORAGE_CONFIG } from "./config";
 
-const KEY = "easy_sync_token";
+const KEY = STORAGE_CONFIG.TOKEN_KEY;
 
 interface AuthContextType {
   token: string | null;

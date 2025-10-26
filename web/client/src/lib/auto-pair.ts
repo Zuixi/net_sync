@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "./auth";
+import { DEVICE_CONFIG, STORAGE_CONFIG } from "./config";
 
 /**
  * 自动配对Hook
@@ -12,6 +13,7 @@ export function useAutoPair() {
   const [error, setError] = useState<string | null>(null);
   const [autoPaired, setAutoPaired] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const pairingInProgressRef = useRef(false);
 
   useEffect(() => {
     // 如果已有token,标记为已配对
@@ -22,13 +24,16 @@ export function useAutoPair() {
     }
 
     // 如果已经尝试过配对,不重复执行
-    if (attempted) return;
+    if (attempted || pairingInProgressRef.current) return;
+
+    // 标记为已尝试，防止重复执行
+    setAttempted(true);
+    pairingInProgressRef.current = true;
 
     // 执行自动配对
     async function autoPair() {
       setLoading(true);
       setError(null);
-      setAttempted(true);
 
       try {
         console.log("开始自动配对...");
@@ -46,8 +51,8 @@ export function useAutoPair() {
         // 2. 生成设备信息
         const deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const deviceName = navigator.userAgent.includes("Mobile")
-          ? "移动设备"
-          : "网页浏览器";
+          ? DEVICE_CONFIG.MOBILE_NAME
+          : DEVICE_CONFIG.BROWSER_NAME;
         console.log("设备信息:", { deviceId, deviceName });
 
         // 3. 执行配对
@@ -72,8 +77,11 @@ export function useAutoPair() {
 
         if (pairData.token) {
           saveToken(pairData.token);
+          // 保存设备信息到 localStorage
+          localStorage.setItem(STORAGE_CONFIG.DEVICE_ID_KEY, deviceId);
+          localStorage.setItem(STORAGE_CONFIG.DEVICE_NAME_KEY, deviceName);
           setAutoPaired(true);
-          console.log("自动配对成功!");
+          console.log("自动配对成功! Device ID:", deviceId, "Device Name:", deviceName);
         } else {
           throw new Error("配对成功但未返回token");
         }
@@ -82,6 +90,7 @@ export function useAutoPair() {
         setError(e?.message || "自动配对失败");
       } finally {
         setLoading(false);
+        pairingInProgressRef.current = false;
       }
     }
 

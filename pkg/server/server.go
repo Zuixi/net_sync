@@ -39,9 +39,46 @@ func NewServer(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 	// CORS middleware
 	router.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		// Allow origins from config
+		origin := "*"
+		if len(cfg.CORS.AllowedOrigins) > 0 {
+			origin = cfg.CORS.AllowedOrigins[0]
+			// If multiple origins, check if request origin is in the list
+			if len(cfg.CORS.AllowedOrigins) > 1 {
+				requestOrigin := c.Request.Header.Get("Origin")
+				for _, allowed := range cfg.CORS.AllowedOrigins {
+					if allowed == requestOrigin || allowed == "*" {
+						origin = allowed
+						break
+					}
+				}
+			}
+		}
+		c.Header("Access-Control-Allow-Origin", origin)
+
+		// Set allowed methods from config
+		if len(cfg.CORS.AllowedMethods) > 0 {
+			methods := ""
+			for i, method := range cfg.CORS.AllowedMethods {
+				if i > 0 {
+					methods += ", "
+				}
+				methods += method
+			}
+			c.Header("Access-Control-Allow-Methods", methods)
+		}
+
+		// Set allowed headers from config
+		if len(cfg.CORS.AllowedHeaders) > 0 {
+			headers := ""
+			for i, header := range cfg.CORS.AllowedHeaders {
+				if i > 0 {
+					headers += ", "
+				}
+				headers += header
+			}
+			c.Header("Access-Control-Allow-Headers", headers)
+		}
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -309,9 +346,15 @@ func (s *Server) pairDevice(c *gin.Context) {
 		return
 	}
 
+	tokenExpiry, err := s.config.GetJWTTokenExpiry()
+	if err != nil {
+		s.logger.WithError(err).Warn("Invalid JWT token expiry, using default 24h")
+		tokenExpiry = 24 * time.Hour
+	}
+
 	c.JSON(200, gin.H{
 		"token":      token,
-		"expires_in": s.config.Security.TokenExpiry * 60, // convert to seconds
+		"expires_in": int(tokenExpiry.Seconds()), // convert to seconds
 	})
 }
 

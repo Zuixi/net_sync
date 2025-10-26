@@ -42,7 +42,7 @@ func NewAuthService(cfg *config.Config, logger *logrus.Logger) *AuthService {
 		secret, err := generateRandomToken(32)
 		if err != nil {
 			logger.WithError(err).Error("Failed to generate JWT secret")
-			cfg.Security.JWTSecret = "fallback-secret-change-in-production"
+			cfg.Security.JWTSecret = cfg.Security.FallbackJWTSecret
 		} else {
 			cfg.Security.JWTSecret = secret
 		}
@@ -53,7 +53,7 @@ func NewAuthService(cfg *config.Config, logger *logrus.Logger) *AuthService {
 		token, err := generateRandomToken(16)
 		if err != nil {
 			logger.WithError(err).Error("Failed to generate pairing token")
-			cfg.Security.PairingToken = "fallback-token"
+			cfg.Security.PairingToken = cfg.Security.FallbackPairingToken
 		} else {
 			cfg.Security.PairingToken = token
 		}
@@ -67,14 +67,20 @@ func NewAuthService(cfg *config.Config, logger *logrus.Logger) *AuthService {
 }
 
 func (a *AuthService) GenerateDeviceToken(deviceID, deviceName string) (string, error) {
+	tokenExpiry, err := a.config.GetJWTTokenExpiry()
+	if err != nil {
+		a.logger.WithError(err).Warn("Invalid JWT token expiry, using default 24h")
+		tokenExpiry = 24 * time.Hour
+	}
+
 	claims := &Claims{
 		DeviceID:   deviceID,
 		DeviceName: deviceName,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(a.config.Security.TokenExpiry) * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "easy-sync",
+			Issuer:    a.config.Security.JWTIssuer,
 			Subject:   deviceID,
 		},
 	}
@@ -117,7 +123,7 @@ func (a *AuthService) GenerateQRData() (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"url":       fmt.Sprintf("http://%s", a.config.GetAddr()),
 		"token":     a.config.Security.PairingToken,
-		"device_id": a.config.Discovery.DeviceName,
+		"device_id": a.config.MDNS.DeviceName,
 		"timestamp": time.Now().Unix(),
 	}, nil
 }

@@ -30,7 +30,12 @@
       "mcp__playwright__browser_close",
       "Bash(node test-multi-client.mjs:*)",
       "mcp__playwright__browser_evaluate",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(taskkill /F /PID 55964)",
+      "Bash(netstat:*)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(timeout /t 5 /nobreak)",
+      "mcp__playwright__browser_tabs"
     ],
     "deny": [],
     "ask": []
