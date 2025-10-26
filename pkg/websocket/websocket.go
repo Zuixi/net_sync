@@ -55,6 +55,7 @@ type HelloMessage struct {
 
 type Client struct {
 	ID          string
+	DeviceID    string // Paired device ID from JWT
 	DeviceName  string
 	Connection  *websocket.Conn
 	Send        chan Message
@@ -123,6 +124,7 @@ func (m *Manager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Create new client
 	client := &Client{
 		ID:          uuid.New().String(),
+		DeviceID:    claims.DeviceID,
 		DeviceName:  claims.DeviceName,
 		Connection:  conn,
 		Send:        make(chan Message, m.config.WebSocket.SendChannelBuffer),
@@ -486,7 +488,7 @@ func (m *Manager) GetConnectedDevices() []map[string]interface{} {
 		client.mu.RLock()
 		if client.IsConnected {
 			devices = append(devices, map[string]interface{}{
-				"id":          client.ID,
+				"id":          client.DeviceID, // Return paired device ID instead of WebSocket client ID
 				"device_name": client.DeviceName,
 				"last_ping":   client.LastPing,
 			})

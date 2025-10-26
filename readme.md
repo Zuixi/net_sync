@@ -269,6 +269,11 @@ cd web/client && npm i && npm run dev  # 端口 3000
 
 ---
 
+## claude code cli 使用体验
+
+### 对中文支持不友好
+- [中文字符将会乱码](https://github.com/anthropics/claude-code/issues/2780)
+
 ## 贡献与许可证
 - 贡献流程：Fork → 功能分支 → 提交更改 → PR
 - 许可证：MIT

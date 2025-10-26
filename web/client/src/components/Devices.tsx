@@ -32,9 +32,9 @@ export default function Devices() {
       <div className="mt-3 space-y-2">
         {devices.length === 0 && <p className="text-sm text-slate-400">暂无设备</p>}
         {devices.map((d, i) => {
-          // 判断是否为当前设备（通过设备名称匹配）
-          const currentDeviceName = localStorage.getItem(STORAGE_CONFIG.DEVICE_NAME_KEY);
-          const isCurrentDevice = d.device_name === currentDeviceName;
+          // 判断是否为当前设备（通过设备 ID 匹配）
+          const currentDeviceId = localStorage.getItem(STORAGE_CONFIG.DEVICE_ID_KEY);
+          const isCurrentDevice = d.id === currentDeviceId;
 
           return (
             <div

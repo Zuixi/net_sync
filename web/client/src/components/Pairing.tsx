@@ -13,13 +13,19 @@ export default function Pairing() {
     setLoading(true);
     setError(null);
     try {
+      // 使用与 WebSocket 连接时一致的设备名
+      const deviceName = navigator.userAgent.includes("Mobile") ? "移动设备" : "网页浏览器";
+
+      // 保存设备名到 localStorage，确保与 WebSocket 连接时使用的一致
+      localStorage.setItem("easy_sync_device_name", deviceName);
+
       const res = await fetch("/api/pair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: tokenInput.trim(),
           device_id: 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-          device_name: navigator.userAgent.includes("Mobile") ? DEVICE_CONFIG.MOBILE_NAME : DEVICE_CONFIG.DESKTOP_NAME,
+          device_name: deviceName,
         }),
       });
       const data = await res.json();

@@ -50,9 +50,8 @@ export function useAutoPair() {
 
         // 2. 生成设备信息
         const deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const deviceName = navigator.userAgent.includes("Mobile")
-          ? DEVICE_CONFIG.MOBILE_NAME
-          : DEVICE_CONFIG.BROWSER_NAME;
+        // 使用与 WebSocket 连接时一致的设备名
+        const deviceName = navigator.userAgent.includes("Mobile") ? "移动设备" : "网页浏览器";
         console.log("设备信息:", { deviceId, deviceName });
 
         // 3. 执行配对

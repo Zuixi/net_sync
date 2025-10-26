@@ -359,12 +359,8 @@ func (s *Server) pairDevice(c *gin.Context) {
 }
 
 func (s *Server) listDevices(c *gin.Context) {
-	devices, err := s.auth.ListDevices()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to list devices"})
-		return
-	}
-
+	// Return currently connected devices from WebSocket manager
+	devices := s.wsManager.GetConnectedDevices()
 	c.JSON(200, gin.H{"devices": devices})
 }
 

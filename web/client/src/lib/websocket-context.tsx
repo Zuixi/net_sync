@@ -128,6 +128,14 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       socket.onerror = (error) => {
         console.error("WebSocket error:", error);
         setConnected(false);
+
+        // 如果是认证错误（token失效），清除token并提示重新配对
+        const disconnectMsg = {
+          type: "system",
+          id: `sys_error_${Date.now()}`,
+          text: "连接失败，请刷新页面重新配对"
+        };
+        setMessages((m) => [disconnectMsg, ...m]);
       };
 
       socket.onclose = (event) => {

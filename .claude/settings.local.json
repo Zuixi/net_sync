@@ -35,7 +35,11 @@
       "Bash(netstat:*)",
       "Bash(timeout /t 3 /nobreak)",
       "Bash(timeout /t 5 /nobreak)",
-      "mcp__playwright__browser_tabs"
+      "mcp__playwright__browser_tabs",
+      "Bash(tasklist:*)",
+      "Bash(./easy-sync.exe:*)",
+      "Bash(node test-device-list.mjs:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
